@@ -147,6 +147,31 @@ footer{max-width:1180px;margin:0 auto;padding:10px 24px 30px;font-size:12px;colo
 .mactions .err{flex:1}
 .fromclaude{background:var(--peach);border-radius:8px;padding:8px 12px;font-size:13px;margin-top:10px}
 #newbtn{white-space:nowrap}
+.ttype{display:flex;gap:6px}
+.ttype button{flex:1;border:1px solid var(--line);background:var(--white);border-radius:8px;padding:7px;font-weight:700;color:var(--navy);font-size:13px}
+.ttype button.on{background:var(--navy);color:var(--white);border-color:var(--navy)}
+.topic{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;display:flex;gap:12px;align-items:flex-start}
+.topic .num{font-weight:800;color:var(--orange);min-width:22px;font-size:16px}
+.topic .t{font-weight:700;color:var(--navy);text-decoration:none}
+.topic .m{font-size:12px;color:var(--muted);margin-top:3px}
+.topic .d{font-size:13px;color:#444a63;margin-top:4px;white-space:pre-wrap}
+.tylabel{display:inline-block;border-radius:6px;padding:1px 8px;font-size:11px;font-weight:800;letter-spacing:.3px;text-transform:uppercase}
+.ty-decision{background:var(--orange);color:#fff}.ty-discussion{background:var(--navy);color:#fff}.ty-update{background:var(--paleblue);color:var(--navy)}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:14px 0 4px}
+.search{flex:1;min-width:220px;font:inherit;padding:9px 12px;border:1px solid var(--lightgrey);border-radius:8px;background:var(--white);color:var(--ink)}
+.meeting{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);padding:18px 22px;margin-bottom:12px}
+.meeting .mh{display:flex;justify-content:space-between;align-items:baseline;gap:10px;border-bottom:2px solid var(--paleblue);padding-bottom:8px;margin-bottom:10px}
+.meeting .mh b{font-size:17px}
+.meeting .mh span{font-size:12px;color:var(--footer)}
+.meeting h4{font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin:12px 0 6px}
+.dec{display:grid;grid-template-columns:minmax(0,1fr) 22px minmax(0,1.3fr);gap:6px;align-items:start;padding:6px 0;border-top:1px solid var(--box);font-size:14px}
+.dec:first-of-type{border-top:none}
+.dec .q{color:#444a63}.dec .ar{color:var(--orange);font-weight:800;text-align:center}.dec .a{font-weight:700;color:var(--navy)}
+.meeting ul{margin:0;padding-left:18px;font-size:14px}
+.meeting details summary{cursor:pointer;font-size:13px;font-weight:700;color:var(--navy);margin-top:12px}
+.meeting details div{white-space:pre-wrap;font-size:13px;color:#444a63;margin-top:8px;background:var(--bg);border-radius:8px;padding:10px 12px}
+mark{background:var(--peach);color:inherit;padding:0 1px;border-radius:2px}
+@media (max-width:820px){.dec{grid-template-columns:1fr}.dec .ar{display:none}.meeting{padding:14px}}
 
 @media (max-width:820px){
   .bar{padding:10px 16px;gap:10px;flex-wrap:wrap}
@@ -190,7 +215,8 @@ footer{max-width:1180px;margin:0 auto;padding:10px 24px 30px;font-size:12px;colo
     <button data-tab="day" class="on">My day</button>
     <button data-tab="board">Board<span class="count" id="c-board"></span></button>
     <button data-tab="waiting">Waiting &amp; blocked<span class="count" id="c-blocked"></span></button>
-    <button data-tab="agenda">Meeting agenda</button>
+    <button data-tab="agenda">Agenda<span class="count" id="c-agenda"></span></button>
+    <button data-tab="meetings">Past meetings</button>
     <button data-tab="fyi">FYI<span class="count" id="c-fyi"></span></button>
   </nav>
 </header>
@@ -200,11 +226,13 @@ footer{max-width:1180px;margin:0 auto;padding:10px 24px 30px;font-size:12px;colo
 
 <div class="overlay hidden" id="newform">
   <div class="modal">
-    <h1>New request</h1>
+    <h1 id="nf-h">New request</h1>
     <div class="fromclaude hidden" id="nf-claude">Prepared by Claude. Check it, then post.</div>
     <label class="f">Type</label>
-    <div class="kind"><button type="button" data-k="req" class="on">Request with deadline</button><button type="button" data-k="fyi">FYI to everyone</button></div>
-    <label class="f" for="nf-title">What is needed</label>
+    <div class="kind"><button type="button" data-k="req" class="on">Request with deadline</button><button type="button" data-k="fyi">FYI to everyone</button><button type="button" data-k="topic">Agenda topic</button></div>
+    <div id="nf-topiconly" class="hidden"><label class="f">What does it need from the board?</label>
+      <div class="ttype"><button type="button" data-t="decision">Decision</button><button type="button" data-t="discussion" class="on">Discussion</button><button type="button" data-t="update">Update</button></div></div>
+    <label class="f" for="nf-title" id="nf-tlabel">What is needed</label>
     <input type="text" id="nf-title" placeholder="e.g. Send sponsor logos for the Career Day booklet">
     <label class="f">From</label>
     <div class="roles" id="nf-from"></div>
@@ -285,6 +313,8 @@ function parseIssue(i){
     n:i.number, title:i.title, url:i.html_url, created:i.created_at, closed:i.closed_at,
     done: i.state === "closed", from: lab("from:")[0] || null, to: lab("to:"),
     blocked: labels.some(l => l.toLowerCase() === "blocked"), fyi: labels.some(l => l.toLowerCase() === "fyi"),
+    agenda: labels.some(l => l.toLowerCase() === "agenda"), meeting: labels.some(l => l.toLowerCase() === "meeting"),
+    ttype: (lab("type:")[0] || "DISCUSSION").toLowerCase(), body,
     due: dueM ? dueM[1] : null, reason: blkM ? blkM[1].replace(/\*+/g,"").trim() : "",
     desc, author: i.user && i.user.login
   };
@@ -379,7 +409,7 @@ const listOf = (arr, empty, opts) => arr.length ? `<div class="list">${arr.map(t
 const byDue = (a,b) => (a.due || "9999") < (b.due || "9999") ? -1 : (a.due || "9999") > (b.due || "9999") ? 1 : a.n - b.n;
 
 /* ---------- views ---------- */
-const tasks = () => S.issues.filter(t => !t.fyi);
+const tasks = () => S.issues.filter(t => !t.fyi && !t.agenda && !t.meeting);
 const open = () => tasks().filter(t => !t.done);
 
 function viewDay(){
@@ -469,10 +499,61 @@ function meetingWindow(){
   const prev = addDays(next, -7);
   return { next, prev };
 }
+const TYPES = [["decision","Decisions","Need a yes/no from the board"],["discussion","Discussions","Need the board's input"],["update","Updates","For information"]];
 function viewAgenda(){
   const { next } = meetingWindow();
-  return `<h1>Meeting agenda</h1><p class="sub">Next board meeting: ${fmtLong(next)}</p>
-    <div class="empty">The agenda is being redesigned. Topics for the board meeting will appear here.</div>`;
+  const topics = S.issues.filter(t => t.agenda && !t.done).sort((a,b) => new Date(a.created) - new Date(b.created));
+  let i = 0;
+  const groups = TYPES.map(([k, label, hint]) => {
+    const arr = topics.filter(t => t.ttype === k);
+    if (!arr.length) return "";
+    return `<h2>${label} <span class="n">${arr.length} · ${hint}</span></h2><div class="list">` + arr.map(t => `
+      <div class="topic"><div class="num">${++i}</div><div style="flex:1">
+        <a class="t" href="${t.url}" target="_blank" rel="noopener">${esc(t.title)}</a>
+        <div class="m"><span class="tylabel ty-${k}">${k}</span> &nbsp;raised by <b>${esc(t.from||"?")}</b> · ${ago(t.created)} · #${t.n}</div>
+        ${t.desc ? `<div class="d">${esc(t.desc)}</div>` : ""}</div></div>`).join("") + `</div>`;
+  }).join("");
+  return `<div class="toolbar"><div style="flex:1"><h1>Agenda</h1><p class="sub" style="margin:0">Board meeting · ${fmtLong(next)} · ${topics.length} topic${topics.length===1?"":"s"}</p></div>
+      ${topics.length ? `<button class="ghost" id="copyag">Copy agenda</button>` : ""}
+      <button class="btn orange" id="addtopic">+ Add topic</button></div>
+    ${groups || `<div class="empty" style="margin-top:16px">No topics yet. Add one here, or tell Claude: "put the sponsor budget on the agenda, we need a decision".</div>`}`;
+}
+function agendaText(){
+  const { next } = meetingWindow();
+  const topics = S.issues.filter(t => t.agenda && !t.done).sort((a,b) => new Date(a.created) - new Date(b.created));
+  let i = 0, out = `MSC board meeting · ${fmtLong(next)}\n`;
+  TYPES.forEach(([k, label]) => { const arr = topics.filter(t => t.ttype === k); if (!arr.length) return;
+    out += `\n${label}\n` + arr.map(t => `${++i}. ${t.title} (${t.from})`).join("\n") + "\n" });
+  return out;
+}
+
+function parseMeeting(t){
+  const b = t.body || "";
+  const date = (b.match(/date\**\s*:\**\s*(\d{4}-\d{2}-\d{2})/i) || [])[1] || t.created.slice(0,10);
+  const section = name => { const m = b.match(new RegExp(`##\\s*${name}[^\\n]*\\n([\\s\\S]*?)(?=\\n##\\s|$)`, "i")); return m ? m[1].trim() : "" };
+  const decisions = section("Decisions").split("\n").map(l => l.replace(/^\s*[-*]\s*/, "").trim()).filter(Boolean)
+    .map(l => { const [q, ...rest] = l.split(/\s*(?:→|->)\s*/); return { q: q.replace(/\*\*/g,""), a: rest.join(" → ").replace(/\*\*/g,"") } });
+  const actions = section("Action points").split("\n").map(l => l.replace(/^\s*[-*]\s*/, "").trim()).filter(Boolean);
+  return { ...t, date, decisions, actions, summary: section("Summary") };
+}
+function viewMeetings(){
+  const ms = S.issues.filter(t => t.meeting).map(parseMeeting).sort((a,b) => b.date.localeCompare(a.date));
+  const blocks = ms.map(m => `
+    <div class="meeting" data-text="${esc((m.title + " " + m.body).toLowerCase())}">
+      <div class="mh"><b>${fmtLong(parseYmd(m.date))}</b><span>${m.decisions.length} decision${m.decisions.length===1?"":"s"} · <a href="${m.url}" target="_blank" rel="noopener">#${m.n}</a></span></div>
+      ${m.decisions.length ? `<h4>What we decided</h4>` + m.decisions.map(d => `<div class="dec"><div class="q">${esc(d.q)}</div><div class="ar">→</div><div class="a">${esc(d.a || "")}</div></div>`).join("") : ""}
+      ${m.actions.length ? `<h4>Action points</h4><ul>${m.actions.map(a => `<li>${esc(a)}</li>`).join("")}</ul>` : ""}
+      ${m.summary ? `<details data-n="${m.n}" ${S.openMeet && S.openMeet.has(m.n) ? "open" : ""}><summary>Full summary</summary><div>${esc(m.summary)}</div></details>` : ""}
+    </div>`).join("");
+  return `<h1>Past meetings</h1><p class="sub">Every board meeting and what we decided. Or ask Claude: "what did we decide about …?"</p>
+    <div class="toolbar"><input class="search" id="msearch" placeholder="Search decisions and summaries…" value="${esc(S.mq || "")}"></div>
+    <div id="mlist">${blocks || `<div class="empty">No meetings recorded yet. After a meeting, paste the summary into Claude and ask it to record the meeting.</div>`}</div>
+    <div class="empty hidden" id="mnone">No meeting mentions that.</div>`;
+}
+function applyMeetingSearch(){
+  const q = (S.mq || "").trim().toLowerCase(); let shown = 0;
+  document.querySelectorAll(".meeting").forEach(el => { const hit = !q || el.dataset.text.includes(q); el.classList.toggle("hidden", !hit); if (hit) shown++ });
+  const none = $("#mnone"); if (none) none.classList.toggle("hidden", !(q && shown === 0));
 }
 
 function fyiCard(t){
@@ -495,7 +576,8 @@ function render(){
   const nb = o.filter(t => t.blocked).length; $("#c-blocked").textContent = nb; $("#c-blocked").classList.toggle("alert", nb > 0);
   const nf = S.issues.filter(t => t.fyi && (Date.now() - new Date(t.created)) < 7*86400000).length;
   $("#c-fyi").textContent = nf || ""; $("#c-fyi").classList.toggle("hidden", !nf);
-  const v = { day:viewDay, board:viewBoard, waiting:viewWaiting, agenda:viewAgenda, fyi:viewFyi }[S.tab] || viewDay;
+  const na = S.issues.filter(t => t.agenda && !t.done).length; $("#c-agenda").textContent = na || ""; $("#c-agenda").classList.toggle("hidden", !na);
+  const v = { day:viewDay, board:viewBoard, waiting:viewWaiting, agenda:viewAgenda, meetings:viewMeetings, fyi:viewFyi }[S.tab] || viewDay;
   $("#view").innerHTML = v();
   $("#livedot").classList.remove("stale");
   $("#updated").textContent = `Live · updated ${S.lastOk.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}`;
@@ -503,8 +585,11 @@ function render(){
   // wire view controls
   document.querySelectorAll(".filters button").forEach(b => b.onclick = () => { S.boardFilter = b.dataset.f; render() });
   const sd = $("#showdone"); if (sd) sd.onchange = () => { S.showDone = sd.checked; render() };
+  const at = $("#addtopic"); if (at) at.onclick = () => openForm({ kind:"topic" });
+  const ms = $("#msearch"); if (ms){ ms.oninput = () => { S.mq = ms.value; applyMeetingSearch() }; applyMeetingSearch() }
+  document.querySelectorAll(".meeting details").forEach(d => d.ontoggle = () => { S.openMeet = S.openMeet || new Set(); d.open ? S.openMeet.add(+d.dataset.n) : S.openMeet.delete(+d.dataset.n) });
   const cp = $("#copyag"); if (cp) cp.onclick = async () => {
-    const text = $("#agendabox").innerText.replace("Copy agenda","").trim();
+    const text = agendaText();
     try{ await navigator.clipboard.writeText(text); cp.textContent = "Copied ✓" }catch(e){ cp.textContent = "Select & copy manually" }
     setTimeout(() => cp.textContent = "Copy agenda", 2000);
   };
@@ -515,7 +600,8 @@ let NF = { kind:"req", from:null, to:[] };
 const PREFILL = params.has("new") ? {
   title: params.get("title") || "", from: (params.get("from") || "").toUpperCase(),
   to: (params.get("to") || "").toUpperCase().split(",").map(s => s.trim()).filter(r => ROLES[r]),
-  due: params.get("due") || "", details: params.get("details") || "", fyi: params.get("fyi") === "1"
+  due: params.get("due") || "", details: params.get("details") || "", fyi: params.get("fyi") === "1",
+  kind: params.get("topic") ? "topic" : undefined, ttype: params.get("topic") || undefined
 } : null;
 let prefillShown = false;
 
@@ -528,14 +614,19 @@ function roleButtons(el, selected, multi, onChange){
 }
 function setKind(k){ NF.kind = k;
   document.querySelectorAll(".kind button").forEach(b => b.classList.toggle("on", b.dataset.k === k));
-  $("#nf-reqonly").classList.toggle("hidden", k === "fyi") }
+  $("#nf-reqonly").classList.toggle("hidden", k !== "req");
+  $("#nf-topiconly").classList.toggle("hidden", k !== "topic");
+  $("#nf-h").textContent = { req:"New request", fyi:"New FYI", topic:"Add agenda topic" }[k];
+  $("#nf-tlabel").textContent = { req:"What is needed", fyi:"Announcement", topic:"Topic" }[k];
+  $("#nf-title").placeholder = k === "topic" ? "e.g. Budget for the alumni evening" : "e.g. Send sponsor logos for the Career Day booklet" }
+function setTType(t){ NF.ttype = t; document.querySelectorAll(".ttype button").forEach(b => b.classList.toggle("on", b.dataset.t === t)) }
 function openForm(p){
   p = p || {};
-  NF = { kind: p.fyi ? "fyi" : "req", from: (ROLES[p.from] ? p.from : null) || S.roles[S.login] || S.viewAs || null, to: p.to || [] };
+  NF = { kind: p.kind || (p.fyi ? "fyi" : "req"), ttype: p.ttype || "discussion", from: (ROLES[p.from] ? p.from : null) || S.roles[S.login] || S.viewAs || null, to: p.to || [] };
   $("#nf-title").value = p.title || ""; $("#nf-due").value = p.due || ""; $("#nf-details").value = p.details || "";
   $("#nf-err").textContent = ""; $("#nf-post").disabled = false; $("#nf-post").textContent = "Post to board";
   $("#nf-claude").classList.toggle("hidden", !p.title);
-  setKind(NF.kind);
+  setKind(NF.kind); setTType(NF.ttype);
   roleButtons($("#nf-from"), NF.from ? [NF.from] : [], false, s => NF.from = s[0]);
   roleButtons($("#nf-to"), NF.to, true, s => NF.to = s);
   $("#newform").classList.remove("hidden");
@@ -545,14 +636,14 @@ function closeForm(){ $("#newform").classList.add("hidden");
   if (PREFILL) history.replaceState(null, "", location.pathname + (params.get("repo") ? `?repo=${encodeURIComponent(REPO)}` : "")) }
 async function postForm(){
   const title = $("#nf-title").value.trim(), due = $("#nf-due").value, details = $("#nf-details").value.trim();
-  const fyi = NF.kind === "fyi";
+  const fyi = NF.kind === "fyi", topic = NF.kind === "topic";
   const err = m => { $("#nf-err").textContent = m };
   if (!title) return err("Add what is needed.");
   if (!NF.from) return err("Pick who it is from.");
-  if (!fyi && !NF.to.length) return err("Pick at least one head who owes it.");
-  if (!fyi && !due) return err("Pick a deadline.");
-  const labels = fyi ? ["fyi", `from:${NF.from}`] : [`from:${NF.from}`, ...NF.to.map(r => `to:${r}`)];
-  const body = fyi ? details : `Due: ${due}${details ? "\n" + details : ""}`;
+  if (NF.kind === "req" && !NF.to.length) return err("Pick at least one head who owes it.");
+  if (NF.kind === "req" && !due) return err("Pick a deadline.");
+  const labels = topic ? ["agenda", `type:${NF.ttype}`, `from:${NF.from}`] : fyi ? ["fyi", `from:${NF.from}`] : [`from:${NF.from}`, ...NF.to.map(r => `to:${r}`)];
+  const body = (fyi || topic) ? details : `Due: ${due}${details ? "\n" + details : ""}`;
   const hdr = { "Authorization":`Bearer ${TOKEN}`, "Accept":"application/vnd.github+json", "Content-Type":"application/json" };
   $("#nf-post").disabled = true; $("#nf-post").textContent = "Posting…";
   try{
@@ -561,7 +652,7 @@ async function postForm(){
     const issue = await r.json();
     if (fyi) await fetch(`https://api.github.com/repos/${REPO}/issues/${issue.number}`, { method:"PATCH", headers:hdr, body: JSON.stringify({ state:"closed" }) });
     $("#nf-post").textContent = "Posted ✓";
-    setTimeout(() => { closeForm(); S.tab = fyi ? "fyi" : "board"; store.set("msc-hub-tab", S.tab); loadAll() }, 700);
+    setTimeout(() => { closeForm(); S.tab = topic ? "agenda" : fyi ? "fyi" : "board"; store.set("msc-hub-tab", S.tab); loadAll() }, 700);
   }catch(e){ $("#nf-post").disabled = false; $("#nf-post").textContent = "Post to board"; err(e.message) }
 }
 $("#newbtn").onclick = () => openForm();
@@ -569,6 +660,7 @@ $("#nf-cancel").onclick = closeForm;
 $("#nf-post").onclick = postForm;
 $("#newform").onclick = e => { if (e.target.id === "newform") closeForm() };
 document.querySelectorAll(".kind button").forEach(b => b.onclick = () => setKind(b.dataset.k));
+document.querySelectorAll(".ttype button").forEach(b => b.onclick = () => setTType(b.dataset.t));
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#newform").classList.contains("hidden")) closeForm() });
 
 /* ---------- boot ---------- */
