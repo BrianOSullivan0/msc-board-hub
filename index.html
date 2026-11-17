@@ -151,6 +151,8 @@ footer{max-width:1180px;margin:0 auto;padding:10px 24px 30px;font-size:12px;colo
 .ttype button{flex:1;border:1px solid var(--line);background:var(--white);border-radius:8px;padding:7px;font-weight:700;color:var(--navy);font-size:13px}
 .ttype button.on{background:var(--navy);color:var(--white);border-color:var(--navy)}
 .topic{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;display:flex;gap:12px;align-items:flex-start}
+.topic .rm{background:none;border:1px solid var(--line);border-radius:6px;color:var(--footer);font-size:12px;padding:3px 8px;white-space:nowrap}
+.topic .rm.sure{background:var(--red);border-color:var(--red);color:#fff}
 .topic .num{font-weight:800;color:var(--orange);min-width:22px;font-size:16px}
 .topic .t{font-weight:700;color:var(--navy);text-decoration:none}
 .topic .m{font-size:12px;color:var(--muted);margin-top:3px}
@@ -511,7 +513,7 @@ function viewAgenda(){
       <div class="topic"><div class="num">${++i}</div><div style="flex:1">
         <a class="t" href="${t.url}" target="_blank" rel="noopener">${esc(t.title)}</a>
         <div class="m"><span class="tylabel ty-${k}">${k}</span> &nbsp;raised by <b>${esc(t.from||"?")}</b> · ${ago(t.created)} · #${t.n}</div>
-        ${t.desc ? `<div class="d">${esc(t.desc)}</div>` : ""}</div></div>`).join("") + `</div>`;
+        ${t.desc ? `<div class="d">${esc(t.desc)}</div>` : ""}</div><button class="rm" data-n="${t.n}" title="Take off the agenda">Remove</button></div>`).join("") + `</div>`;
   }).join("");
   return `<div class="toolbar"><div style="flex:1"><h1>Agenda</h1><p class="sub" style="margin:0">Board meeting · ${fmtLong(next)} · ${topics.length} topic${topics.length===1?"":"s"}</p></div>
       ${topics.length ? `<button class="ghost" id="copyag">Copy agenda</button>` : ""}
@@ -586,6 +588,16 @@ function render(){
   document.querySelectorAll(".filters button").forEach(b => b.onclick = () => { S.boardFilter = b.dataset.f; render() });
   const sd = $("#showdone"); if (sd) sd.onchange = () => { S.showDone = sd.checked; render() };
   const at = $("#addtopic"); if (at) at.onclick = () => openForm({ kind:"topic" });
+  document.querySelectorAll(".topic .rm").forEach(b => b.onclick = async () => {
+    if (!b.classList.contains("sure")){ b.classList.add("sure"); b.textContent = "Sure?"; setTimeout(() => { b.classList.remove("sure"); b.textContent = "Remove" }, 3000); return }
+    b.disabled = true; b.textContent = "Removing…";
+    const hdr = { "Authorization":`Bearer ${TOKEN}`, "Accept":"application/vnd.github+json", "Content-Type":"application/json" };
+    try{
+      const r = await fetch(`https://api.github.com/repos/${REPO}/issues/${b.dataset.n}`, { method:"PATCH", headers:hdr, body: JSON.stringify({ state:"closed", state_reason:"not_planned" }) });
+      if (!r.ok) throw new Error(r.status);
+      loadAll();
+    }catch(e){ b.disabled = false; b.textContent = "Failed" }
+  });
   const ms = $("#msearch"); if (ms){ ms.oninput = () => { S.mq = ms.value; applyMeetingSearch() }; applyMeetingSearch() }
   document.querySelectorAll(".meeting details").forEach(d => d.ontoggle = () => { S.openMeet = S.openMeet || new Set(); d.open ? S.openMeet.add(+d.dataset.n) : S.openMeet.delete(+d.dataset.n) });
   const cp = $("#copyag"); if (cp) cp.onclick = async () => {
