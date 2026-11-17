@@ -65,6 +65,12 @@ h2 .n{font-size:12px;color:var(--footer);letter-spacing:0;text-transform:none;fo
 .card.today{border-left-color:var(--orange)}
 .card.blocked{border-left-color:var(--grey);background:#FAFAFB}
 .card.done{opacity:.6}
+.donebtn{border:1px solid var(--green);background:var(--white);color:var(--green);border-radius:7px;padding:3px 10px;font-size:12px;font-weight:700;white-space:nowrap}
+.donebtn:hover{background:var(--green);color:#fff}
+.donebtn.sure{background:var(--green);color:#fff}
+.donebtn.undo{border-color:var(--lightgrey);color:var(--muted)}
+.donebtn.undo:hover{background:var(--box);color:var(--navy)}
+.card.justdone{transition:opacity .4s, transform .4s;opacity:0;transform:translateX(12px)}
 .card .t{font-weight:700;text-decoration:none;color:var(--navy)}
 .card .t:hover{text-decoration:underline}
 .card .meta{grid-column:1/2;display:flex;flex-wrap:wrap;gap:6px 10px;font-size:12px;color:var(--muted);align-items:center}
@@ -216,7 +222,6 @@ mark{background:var(--peach);color:inherit;padding:0 1px;border-radius:2px}
   <nav id="tabs">
     <button data-tab="day" class="on">My day</button>
     <button data-tab="board">Board<span class="count" id="c-board"></span></button>
-    <button data-tab="waiting">Waiting &amp; blocked<span class="count" id="c-blocked"></span></button>
     <button data-tab="agenda">Agenda<span class="count" id="c-agenda"></span></button>
     <button data-tab="meetings">Past meetings</button>
     <button data-tab="fyi">FYI<span class="count" id="c-fyi"></span></button>
@@ -275,7 +280,7 @@ const store = {
   del(k){ try{ localStorage.removeItem(k) }catch(e){} }
 };
 let TOKEN = store.get("msc-hub-token");
-let S = { login:null, roles:{}, config:{}, issues:[], viewAs:null, tab: store.get("msc-hub-tab") || "day",
+let S = { login:null, roles:{}, config:{}, issues:[], viewAs:null, tab: (store.get("msc-hub-tab") === "waiting" ? "day" : store.get("msc-hub-tab")) || "day",
           boardFilter:"ALL", showDone:false, lastOk:null };
 
 /* ---------- helpers ---------- */
@@ -399,7 +404,8 @@ function card(t, opts = {}){
   const chipTxt = { overdue:"Overdue", blocked:"Blocked", today:"Today", done:"Done", open:"" }[st];
   return `<div class="card ${st}">
     <a class="t" href="${t.url}" target="_blank" rel="noopener">${esc(t.title)}</a>
-    <div class="right"><span class="due ${st}">${dueTxt}</span>${chipTxt ? `<span class="chip st-${st}">${chipTxt}</span>` : ""}</div>
+    <div class="right"><span class="due ${st}">${dueTxt}</span>${chipTxt ? `<span class="chip st-${st}">${chipTxt}</span>` : ""}
+      ${t.done ? `<button class="donebtn undo" data-n="${t.n}">Reopen</button>` : `<button class="donebtn" data-n="${t.n}">✓ Done</button>`}</div>
     <div class="meta"><span class="chip from">${esc(t.from || "?")}</span><span class="arrow">→</span>
       ${t.to.map(r => `<span class="chip">${esc(r)}</span>`).join(" ") || `<span class="chip">?</span>`}
       <span>#${t.n} · raised ${ago(t.created)}</span></div>
@@ -461,36 +467,6 @@ function viewBoard(){
     </div>
     <h2>${f==="ALL" ? "All requests" : `Involving ${esc(ROLES[f])}`} <span class="n">${arr.length}</span></h2>
     ${listOf(arr, "No requests here.", {desc:false})}`;
-}
-
-function viewWaiting(){
-  const o = open();
-  const blocked = o.filter(t => t.blocked).sort(byDue);
-  const t0 = today();
-  // matrix: rows = owes (to), cols = waiting (from)
-  const cell = (to, from) => o.filter(t => t.from === from && t.to.includes(to));
-  let max = 1; ROLE_KEYS.forEach(a => ROLE_KEYS.forEach(b => { if (a!==b) max = Math.max(max, cell(a,b).length) }));
-  const shade = n => n === 0 ? "background:#F6F7FA;color:#C9CCD6" :
-    `background:rgba(36,46,87,${0.12 + 0.75*n/max});color:${n/max > .45 ? "#fff" : "#242E57"}`;
-  const matrix = `<table class="matrix"><tr><th></th>${ROLE_KEYS.map(k => `<th>${k}</th>`).join("")}</tr>` +
-    ROLE_KEYS.map(to => `<tr><th class="rowh">${to} owes</th>${ROLE_KEYS.map(from => {
-      if (to === from) return `<td class="self"></td>`;
-      const c = cell(to, from); const late = c.filter(t => t.due && t.due < t0).length;
-      return `<td style="${shade(c.length)}" title="${to} owes ${from}: ${c.length} open${late?`, ${late} overdue`:""}">${c.length || "·"}${late ? `<sup style="color:${c.length/max>.45?"#FBE5D6":"#C2463B"}">!</sup>`:""}</td>`
-    }).join("")}</tr>`).join("") + `</table>
-    <div class="legend">Read across: row = the head who owes, column = the head waiting. <b style="color:#C2463B">!</b> = something in that cell is overdue.</div>`;
-  const roleCards = ROLE_KEYS.map(r => {
-    const owes = o.filter(t => t.to.includes(r)); const late = owes.filter(t => t.due && t.due < t0).length;
-    const blk = owes.filter(t => t.blocked).length; const waits = o.filter(t => t.from === r).length;
-    return `<div class="rolecard"><div class="h"><b>${r}</b><span style="font-size:12px;color:var(--footer)">${ROLES[r]}</span></div>
-      <div class="nums"><span><b>${owes.length}</b>owes</span><span class="${late?"bad":""}"><b>${late}</b>overdue</span><span><b>${blk}</b>blocked</span><span><b>${waits}</b>waiting on others</span></div></div>`;
-  }).join("");
-  return `
-    <h1>Waiting &amp; blocked</h1>
-    <p class="sub">Who is holding up whom right now. No blame, just visibility.</p>
-    <h2>Blocked <span class="n">${blocked.length}</span></h2>${listOf(blocked, "Nothing is blocked. 🎉")}
-    <h2>Who owes whom</h2>${matrix}
-    <h2>Per head</h2><div class="rolegrid">${roleCards}</div>`;
 }
 
 function meetingWindow(){
@@ -575,11 +551,10 @@ function render(){
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === S.tab));
   const o = open(); const t0 = today();
   $("#c-board").textContent = o.length;
-  const nb = o.filter(t => t.blocked).length; $("#c-blocked").textContent = nb; $("#c-blocked").classList.toggle("alert", nb > 0);
   const nf = S.issues.filter(t => t.fyi && (Date.now() - new Date(t.created)) < 7*86400000).length;
   $("#c-fyi").textContent = nf || ""; $("#c-fyi").classList.toggle("hidden", !nf);
   const na = S.issues.filter(t => t.agenda && !t.done).length; $("#c-agenda").textContent = na || ""; $("#c-agenda").classList.toggle("hidden", !na);
-  const v = { day:viewDay, board:viewBoard, waiting:viewWaiting, agenda:viewAgenda, meetings:viewMeetings, fyi:viewFyi }[S.tab] || viewDay;
+  const v = { day:viewDay, board:viewBoard, agenda:viewAgenda, meetings:viewMeetings, fyi:viewFyi }[S.tab] || viewDay;
   $("#view").innerHTML = v();
   $("#livedot").classList.remove("stale");
   $("#updated").textContent = `Live · updated ${S.lastOk.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}`;
@@ -600,6 +575,18 @@ function render(){
   });
   const ms = $("#msearch"); if (ms){ ms.oninput = () => { S.mq = ms.value; applyMeetingSearch() }; applyMeetingSearch() }
   document.querySelectorAll(".meeting details").forEach(d => d.ontoggle = () => { S.openMeet = S.openMeet || new Set(); d.open ? S.openMeet.add(+d.dataset.n) : S.openMeet.delete(+d.dataset.n) });
+  document.querySelectorAll(".donebtn").forEach(b => b.onclick = async () => {
+    const undo = b.classList.contains("undo");
+    if (!undo && !b.classList.contains("sure")){ b.classList.add("sure"); b.textContent = "Mark done?"; setTimeout(() => { if (b.isConnected && !b.disabled){ b.classList.remove("sure"); b.textContent = "✓ Done" } }, 3000); return }
+    b.disabled = true; b.textContent = undo ? "Reopening…" : "Saving…";
+    const hdr = { "Authorization":`Bearer ${TOKEN}`, "Accept":"application/vnd.github+json", "Content-Type":"application/json" };
+    try{
+      const r = await fetch(`https://api.github.com/repos/${REPO}/issues/${b.dataset.n}`, { method:"PATCH", headers:hdr,
+        body: JSON.stringify(undo ? { state:"open" } : { state:"closed", state_reason:"completed" }) });
+      if (!r.ok) throw new Error(r.status);
+      if (!undo){ const c = b.closest(".card"); c.classList.add("justdone"); setTimeout(loadAll, 400) } else loadAll();
+    }catch(e){ b.disabled = false; b.textContent = "Failed, retry" }
+  });
   const cp = $("#copyag"); if (cp) cp.onclick = async () => {
     const text = agendaText();
     try{ await navigator.clipboard.writeText(text); cp.textContent = "Copied ✓" }catch(e){ cp.textContent = "Select & copy manually" }
