@@ -129,6 +129,25 @@ h2 .n{font-size:12px;color:var(--footer);letter-spacing:0;text-transform:none;fo
 .err{color:var(--red);font-size:13px;min-height:18px}
 footer{max-width:1180px;margin:0 auto;padding:10px 24px 30px;font-size:12px;color:var(--footer)}
 
+/* new request */
+.overlay{position:fixed;inset:0;background:rgba(36,46,87,.45);z-index:50;display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px;overflow-y:auto}
+.modal{background:var(--white);border-radius:14px;width:100%;max-width:560px;padding:24px 26px;box-shadow:0 20px 50px rgba(36,46,87,.25);border-top:5px solid var(--orange)}
+.modal h1{font-size:22px}
+.modal label.f{display:block;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin:14px 0 5px}
+.modal input[type=text],.modal input[type=date],.modal textarea{width:100%;font:inherit;padding:9px 11px;border:1px solid var(--lightgrey);border-radius:8px;color:var(--ink);background:var(--white)}
+.modal textarea{min-height:76px;resize:vertical}
+.roles{display:flex;flex-wrap:wrap;gap:6px}
+.roles label{border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:13px;font-weight:700;cursor:pointer;user-select:none}
+.roles input{display:none}
+.roles label.on{background:var(--navy);color:var(--white);border-color:var(--navy)}
+.kind{display:flex;gap:6px}
+.kind button{flex:1;border:1px solid var(--line);background:var(--white);border-radius:8px;padding:8px;font-weight:700;color:var(--navy)}
+.kind button.on{background:var(--paleblue);border-color:var(--navy)}
+.mactions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px;align-items:center}
+.mactions .err{flex:1}
+.fromclaude{background:var(--peach);border-radius:8px;padding:8px 12px;font-size:13px;margin-top:10px}
+#newbtn{white-space:nowrap}
+
 @media (max-width:820px){
   .bar{padding:10px 16px;gap:10px;flex-wrap:wrap}
   .brand span{display:none}
@@ -163,6 +182,7 @@ footer{max-width:1180px;margin:0 auto;padding:10px 24px 30px;font-size:12px;colo
     <img src="logo.png" alt="MSC">
     <div class="brand"><b>Board Hub</b><span>Who needs what from whom, and by when</span></div>
     <div class="spacer"></div>
+    <button class="btn orange" id="newbtn">+ New request</button>
     <div class="live"><span class="dot" id="livedot"></span><span id="updated">Connecting…</span></div>
     <div class="who" id="who"></div>
   </div>
@@ -176,6 +196,30 @@ footer{max-width:1180px;margin:0 auto;padding:10px 24px 30px;font-size:12px;colo
 </header>
 <main id="view"></main>
 <footer id="foot"></footer>
+</div>
+
+<div class="overlay hidden" id="newform">
+  <div class="modal">
+    <h1>New request</h1>
+    <div class="fromclaude hidden" id="nf-claude">Prepared by Claude. Check it, then post.</div>
+    <label class="f">Type</label>
+    <div class="kind"><button type="button" data-k="req" class="on">Request with deadline</button><button type="button" data-k="fyi">FYI to everyone</button></div>
+    <label class="f" for="nf-title">What is needed</label>
+    <input type="text" id="nf-title" placeholder="e.g. Send sponsor logos for the Career Day booklet">
+    <label class="f">From</label>
+    <div class="roles" id="nf-from"></div>
+    <div id="nf-reqonly">
+      <label class="f">Who owes it</label>
+      <div class="roles" id="nf-to"></div>
+      <label class="f" for="nf-due">Deadline</label>
+      <input type="date" id="nf-due">
+    </div>
+    <label class="f" for="nf-details">Details <span style="text-transform:none;font-weight:400">(optional)</span></label>
+    <textarea id="nf-details" placeholder="What does done look like? Links?"></textarea>
+    <div class="mactions"><div class="err" id="nf-err"></div>
+      <button class="ghost" id="nf-cancel" type="button">Cancel</button>
+      <button class="btn" id="nf-post" type="button">Post to board</button></div>
+  </div>
 </div>
 
 <script>
@@ -273,6 +317,7 @@ async function loadAll(){
     S.lastOk = new Date();
     if (!S.viewAs) S.viewAs = store.get("msc-hub-viewas") || S.roles[S.login] || null;
     showApp(); render();
+    if (PREFILL && !prefillShown){ prefillShown = true; openForm(PREFILL) }
   }catch(e){
     if (e.auth){ store.del("msc-hub-token"); TOKEN = null; showSignin(e.message); return }
     if (!S.lastOk){ showSignin(e.message); return }
@@ -486,6 +531,67 @@ function render(){
     setTimeout(() => cp.textContent = "Copy agenda", 2000);
   };
 }
+
+/* ---------- new request ---------- */
+let NF = { kind:"req", from:null, to:[] };
+const PREFILL = params.has("new") ? {
+  title: params.get("title") || "", from: (params.get("from") || "").toUpperCase(),
+  to: (params.get("to") || "").toUpperCase().split(",").map(s => s.trim()).filter(r => ROLES[r]),
+  due: params.get("due") || "", details: params.get("details") || "", fyi: params.get("fyi") === "1"
+} : null;
+let prefillShown = false;
+
+function roleButtons(el, selected, multi, onChange){
+  el.innerHTML = ROLE_KEYS.map(k => `<label class="${selected.includes(k)?"on":""}" title="${ROLES[k]}"><input type="checkbox" value="${k}">${k}</label>`).join("");
+  el.querySelectorAll("label").forEach(l => l.onclick = e => { e.preventDefault();
+    const k = l.querySelector("input").value;
+    const sel = multi ? (selected.includes(k) ? selected.filter(x => x !== k) : [...selected, k]) : [k];
+    onChange(sel); roleButtons(el, sel, multi, onChange) });
+}
+function setKind(k){ NF.kind = k;
+  document.querySelectorAll(".kind button").forEach(b => b.classList.toggle("on", b.dataset.k === k));
+  $("#nf-reqonly").classList.toggle("hidden", k === "fyi") }
+function openForm(p){
+  p = p || {};
+  NF = { kind: p.fyi ? "fyi" : "req", from: (ROLES[p.from] ? p.from : null) || S.roles[S.login] || S.viewAs || null, to: p.to || [] };
+  $("#nf-title").value = p.title || ""; $("#nf-due").value = p.due || ""; $("#nf-details").value = p.details || "";
+  $("#nf-err").textContent = ""; $("#nf-post").disabled = false; $("#nf-post").textContent = "Post to board";
+  $("#nf-claude").classList.toggle("hidden", !p.title);
+  setKind(NF.kind);
+  roleButtons($("#nf-from"), NF.from ? [NF.from] : [], false, s => NF.from = s[0]);
+  roleButtons($("#nf-to"), NF.to, true, s => NF.to = s);
+  $("#newform").classList.remove("hidden");
+  setTimeout(() => (p.title ? $("#nf-post") : $("#nf-title")).focus(), 50);
+}
+function closeForm(){ $("#newform").classList.add("hidden");
+  if (PREFILL) history.replaceState(null, "", location.pathname + (params.get("repo") ? `?repo=${encodeURIComponent(REPO)}` : "")) }
+async function postForm(){
+  const title = $("#nf-title").value.trim(), due = $("#nf-due").value, details = $("#nf-details").value.trim();
+  const fyi = NF.kind === "fyi";
+  const err = m => { $("#nf-err").textContent = m };
+  if (!title) return err("Add what is needed.");
+  if (!NF.from) return err("Pick who it is from.");
+  if (!fyi && !NF.to.length) return err("Pick at least one head who owes it.");
+  if (!fyi && !due) return err("Pick a deadline.");
+  const labels = fyi ? ["fyi", `from:${NF.from}`] : [`from:${NF.from}`, ...NF.to.map(r => `to:${r}`)];
+  const body = fyi ? details : `Due: ${due}${details ? "\n" + details : ""}`;
+  const hdr = { "Authorization":`Bearer ${TOKEN}`, "Accept":"application/vnd.github+json", "Content-Type":"application/json" };
+  $("#nf-post").disabled = true; $("#nf-post").textContent = "Posting…";
+  try{
+    const r = await fetch(`https://api.github.com/repos/${REPO}/issues`, { method:"POST", headers:hdr, body: JSON.stringify({ title, body, labels }) });
+    if (!r.ok) throw new Error(r.status === 403 || r.status === 404 ? "Your key can't post to the board. Make a key with the 'repo' box ticked." : `GitHub said ${r.status}`);
+    const issue = await r.json();
+    if (fyi) await fetch(`https://api.github.com/repos/${REPO}/issues/${issue.number}`, { method:"PATCH", headers:hdr, body: JSON.stringify({ state:"closed" }) });
+    $("#nf-post").textContent = "Posted ✓";
+    setTimeout(() => { closeForm(); S.tab = fyi ? "fyi" : "board"; store.set("msc-hub-tab", S.tab); loadAll() }, 700);
+  }catch(e){ $("#nf-post").disabled = false; $("#nf-post").textContent = "Post to board"; err(e.message) }
+}
+$("#newbtn").onclick = () => openForm();
+$("#nf-cancel").onclick = closeForm;
+$("#nf-post").onclick = postForm;
+$("#newform").onclick = e => { if (e.target.id === "newform") closeForm() };
+document.querySelectorAll(".kind button").forEach(b => b.onclick = () => setKind(b.dataset.k));
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#newform").classList.contains("hidden")) closeForm() });
 
 /* ---------- boot ---------- */
 if (!TOKEN) showSignin(); else loadAll();
