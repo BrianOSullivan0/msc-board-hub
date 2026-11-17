@@ -470,31 +470,9 @@ function meetingWindow(){
   return { next, prev };
 }
 function viewAgenda(){
-  const { next, prev } = meetingWindow();
-  const since = prev.getTime(); const t0 = today();
-  const o = open();
-  const overdue = o.filter(t => t.due && t.due < t0).sort(byDue);
-  const blocked = o.filter(t => t.blocked && !(t.due && t.due < t0));
-  const fresh = tasks().filter(t => !t.done && new Date(t.created).getTime() >= since && !overdue.includes(t) && !blocked.includes(t));
-  const done = tasks().filter(t => t.done && t.closed && new Date(t.closed).getTime() >= since);
-  const fyis = S.issues.filter(t => t.fyi && new Date(t.created).getTime() >= since);
-  const nextWeek = o.filter(t => t.due && t.due >= ymd(next) && t.due <= ymd(addDays(next,7)) && !blocked.includes(t)).sort(byDue);
-  const li = (t, extra) => `<li><b>${esc(t.from||"?")} → ${esc(t.to.join(", ")||"?")}</b>: ${esc(t.title)} ${extra ? `<small>· ${extra}</small>` : ""}</li>`;
-  const sec = (n, title, arr, fn, empty) => `<h3>${n}. ${title} (${arr.length})</h3>` + (arr.length ? `<ol>${arr.map(fn).join("")}</ol>` : `<p class="sub" style="font-size:13px">${empty}</p>`);
-  const html = `
-   <div class="agenda" id="agendabox">
-    <div class="ahead"><div><h1 style="font-size:22px">Board meeting agenda</h1>
-      <p class="sub">${fmtLong(next)} · covers ${prev.toLocaleDateString("en-GB",{day:"numeric",month:"short"})} – today · generated automatically</p></div>
-      <button class="btn orange" id="copyag">Copy agenda</button></div>
-    ${sec(1, "Overdue: decide owner and new date", overdue, t => { const n = -daysBetween(t0,t.due); return li(t, `${n} day${n>1?"s":""} overdue`) }, "Nothing overdue.")}
-    ${sec(2, "Blocked: unblock in the room", blocked, t => li(t, t.reason ? "blocked: " + esc(t.reason) : "blocked"), "Nothing blocked.")}
-    ${sec(3, "New requests since last meeting", fresh, t => li(t, t.due ? "due " + fmtDate(t.due) : "no deadline yet"), "No new requests.")}
-    ${sec(4, "Due before the following meeting", nextWeek, t => li(t, "due " + fmtDate(t.due)), "Nothing due.")}
-    ${sec(5, "Done since last meeting", done, t => li(t, ""), "Nothing closed yet.")}
-    ${sec(6, "FYIs", fyis, t => `<li><b>${esc(t.from||"?")}</b>: ${esc(t.title)}</li>`, "No FYIs.")}
-    <h3>7. Any other business</h3>
-   </div>`;
-  return `<h1>Meeting agenda</h1><p class="sub">Built from the board every time you open it. Meetings: every ${esc(S.config.meetingDay || "Monday")}.</p>` + html;
+  const { next } = meetingWindow();
+  return `<h1>Meeting agenda</h1><p class="sub">Next board meeting: ${fmtLong(next)}</p>
+    <div class="empty">The agenda is being redesigned. Topics for the board meeting will appear here.</div>`;
 }
 
 function fyiCard(t){
