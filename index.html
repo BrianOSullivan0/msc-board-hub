@@ -224,7 +224,6 @@ mark{background:var(--peach);color:inherit;padding:0 1px;border-radius:2px}
     <button data-tab="board">Board<span class="count" id="c-board"></span></button>
     <button data-tab="agenda">Agenda<span class="count" id="c-agenda"></span></button>
     <button data-tab="meetings">Past meetings</button>
-    <button data-tab="fyi">FYI<span class="count" id="c-fyi"></span></button>
   </nav>
 </header>
 <main id="view"></main>
@@ -236,7 +235,7 @@ mark{background:var(--peach);color:inherit;padding:0 1px;border-radius:2px}
     <h1 id="nf-h">New request</h1>
     <div class="fromclaude hidden" id="nf-claude">Prepared by Claude. Check it, then post.</div>
     <label class="f">Type</label>
-    <div class="kind"><button type="button" data-k="req" class="on">Request with deadline</button><button type="button" data-k="fyi">FYI to everyone</button><button type="button" data-k="topic">Agenda topic</button></div>
+    <div class="kind"><button type="button" data-k="req" class="on">Request with deadline</button><button type="button" data-k="topic">Agenda topic</button></div>
     <div id="nf-topiconly" class="hidden"><label class="f">What does it need from the board?</label>
       <div class="ttype"><button type="button" data-t="decision">Decision</button><button type="button" data-t="discussion" class="on">Discussion</button><button type="button" data-t="update">Update</button></div></div>
     <label class="f" for="nf-title" id="nf-tlabel">What is needed</label>
@@ -280,7 +279,7 @@ const store = {
   del(k){ try{ localStorage.removeItem(k) }catch(e){} }
 };
 let TOKEN = store.get("msc-hub-token");
-let S = { login:null, roles:{}, config:{}, issues:[], viewAs:null, tab: (store.get("msc-hub-tab") === "waiting" ? "day" : store.get("msc-hub-tab")) || "day",
+let S = { login:null, roles:{}, config:{}, issues:[], viewAs:null, tab: (["waiting","fyi"].includes(store.get("msc-hub-tab")) ? "day" : store.get("msc-hub-tab")) || "day",
           boardFilter:"ALL", showDone:false, lastOk:null };
 
 /* ---------- helpers ---------- */
@@ -431,7 +430,6 @@ function viewDay(){
   const fresh = mine.filter(t => (Date.now() - new Date(t.created)) < 3*86400000 && !(t.due && t.due <= wk)).sort(byDue);
   const later = mine.filter(t => !overdue.includes(t) && !dueToday.includes(t) && !week.includes(t) && !fresh.includes(t)).sort(byDue);
   const waiting = open().filter(t => t.from === r).sort(byDue);
-  const fyis = S.issues.filter(t => t.fyi && (Date.now() - new Date(t.created)) < 7*86400000);
   const hour = new Date().getHours();
   const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   return `
@@ -441,15 +439,13 @@ function viewDay(){
       <div class="tile ${overdue.length?"warn":""}"><div class="v">${overdue.length}</div><div class="l">Overdue</div></div>
       <div class="tile ${dueToday.length?"warn":""}"><div class="v">${dueToday.length}</div><div class="l">Due today</div></div>
       <div class="tile"><div class="v">${week.length}</div><div class="l">Due in the next 7 days</div></div>
-      <div class="tile"><div class="v">${waiting.length}</div><div class="l">You are waiting on</div></div>
+      <div class="tile"><div class="v">${fresh.length}</div><div class="l">New requests for you</div></div>
     </div>
     ${overdue.length ? `<h2>Overdue <span class="n">${overdue.length}</span></h2>${listOf(overdue,"",{desc:true})}` : ""}
     <h2>Today <span class="n">${dueToday.length}</span></h2>${listOf(dueToday, "Nothing due today.", {desc:true})}
     <h2>This week <span class="n">${week.length}</span></h2>${listOf(week, "Nothing else due this week.")}
     ${fresh.length ? `<h2>New requests for you <span class="n">${fresh.length}</span></h2>${listOf(fresh,"",{desc:true})}` : ""}
     ${later.length ? `<h2>Later <span class="n">${later.length}</span></h2>${listOf(later,"")}` : ""}
-    <h2>You're waiting on <span class="n">${waiting.length}</span></h2>${listOf(waiting, "You're not waiting on anyone.")}
-    ${fyis.length ? `<h2>FYI this week <span class="n">${fyis.length}</span></h2>` + fyis.map(fyiCard).join("") : ""}
   `;
 }
 
@@ -551,10 +547,8 @@ function render(){
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === S.tab));
   const o = open(); const t0 = today();
   $("#c-board").textContent = o.length;
-  const nf = S.issues.filter(t => t.fyi && (Date.now() - new Date(t.created)) < 7*86400000).length;
-  $("#c-fyi").textContent = nf || ""; $("#c-fyi").classList.toggle("hidden", !nf);
   const na = S.issues.filter(t => t.agenda && !t.done).length; $("#c-agenda").textContent = na || ""; $("#c-agenda").classList.toggle("hidden", !na);
-  const v = { day:viewDay, board:viewBoard, agenda:viewAgenda, meetings:viewMeetings, fyi:viewFyi }[S.tab] || viewDay;
+  const v = { day:viewDay, board:viewBoard, agenda:viewAgenda, meetings:viewMeetings }[S.tab] || viewDay;
   $("#view").innerHTML = v();
   $("#livedot").classList.remove("stale");
   $("#updated").textContent = `Live · updated ${S.lastOk.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}`;
@@ -651,7 +645,7 @@ async function postForm(){
     const issue = await r.json();
     if (fyi) await fetch(`https://api.github.com/repos/${REPO}/issues/${issue.number}`, { method:"PATCH", headers:hdr, body: JSON.stringify({ state:"closed" }) });
     $("#nf-post").textContent = "Posted ✓";
-    setTimeout(() => { closeForm(); S.tab = topic ? "agenda" : fyi ? "fyi" : "board"; store.set("msc-hub-tab", S.tab); loadAll() }, 700);
+    setTimeout(() => { closeForm(); S.tab = topic ? "agenda" : "board"; store.set("msc-hub-tab", S.tab); loadAll() }, 700);
   }catch(e){ $("#nf-post").disabled = false; $("#nf-post").textContent = "Post to board"; err(e.message) }
 }
 $("#newbtn").onclick = () => openForm();
